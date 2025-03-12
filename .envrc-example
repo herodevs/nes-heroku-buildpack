@@ -1,0 +1,4 @@
+export NES_TOKEN="pat-nes-XXXXXX-XXXX..."
+export NES_NODE_VERSION="16.20.5"
+export HEROKU_APP="my-example-app"
+export BUILDPACK_REPO="https://github.com/example-company/example-nes-buildpack.git"

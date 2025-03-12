@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+
+echo "Env dir is $ENV_DIR"
+
+ls -alh $ENV_DIR
+
+# Read the secret token from ENV_DIR (this is where Heroku exposes config vars during build)
+if [[ -f "$ENV_DIR/NES_TOKEN" ]]; then
+  TOKEN=$(cat "$ENV_DIR/NES_TOKEN")
+else
+  echo "Error: NES_TOKEN is not set!"
+  exit 1
+fi
+
+if [[ -f "$ENV_DIR/NES_NODE_VERSION" ]]; then
+  TOKEN=$(cat "$ENV_DIR/NES_NODE_VERSION")
+else
+  echo "Error: NES_NODE_VERSION is not set!"
+  exit 1
+fi
+
+NES_TOKEN=$(cat "$ENV_DIR/NES_TOKEN")
+NES_NODE_VERSION=$(cat "$ENV_DIR/NES_NODE_VERSION")
+
+
+echo "Installing Node.js NES v${NES_NODE_VERSION}"
+
+
+# NOTE: these urls could change from time to time.
+# See https://docs.herodevs.com/node/nodejs for more info.
+NODE_URL="https://registry.nes.herodevs.com/nodejs/nes/v${NES_NODE_VERSION}-nes/node-v${NES_NODE_VERSION}-nes-linux-x64.tar.gz"
+
+TMP_DIR="$BUILD_DIR/tmp"
+
+mkdir -p $TMP_DIR
+pushd $TMP_DIR
+
+# Download the actual file
+curl -L -H "Authorization: Bearer $NES_TOKEN" \
+  -o node.tar.gz \
+  $NODE_URL
+if [[ $? -ne 0 ]]; then
+  echo "Failed to download Node.js package"
+  exit 1
+fi
+
+# Unpack the tar file, then move the node distribution 
+# folder (e.g. the only file in the root of node.tar.gz)
+# to the $BUILD_DIR directory
+tar -xzf node.tar.gz
+rm node.tar.gz
+
+# Since the node distribution is archived in a single folder
+# take the only remaining dir and rename it to a well known location
+FILE_DIR=$(ls)
+mv $FILE_DIR $BUILD_DIR/node
+popd 
+rm -rf $TMP_DIR
+
+# ensure node binary can be executed
+chmod a+x $BUILD_DIR/node/bin/node
+
+# we have to put it on the path for the build time
+# (since we're going to npm install now)
+export PATH="$BUILD_DIR/node/bin:$PATH"
+cd $BUILD_DIR
+npm install
+
+
+# And finally, add the node binaries to the PATH for runtime
+NODE_BIN="/app/node/bin" # note `/app` at runtime
+mkdir -p "$BUILD_DIR/.profile.d"
+cat << EOF >> "$BUILD_DIR/.profile.d/node.sh"
+export PATH=$NODE_BIN:\$PATH
+EOF
+
+# That's it!
+echo "Node.js NES installed successfully"
